@@ -138,44 +138,42 @@ distinct(country_ocean) %>%
 df_tardigrada <- df_tardigrada %>%
   dplyr::filter(continent %in% c("North America","South America","Antarctica"))
 
-
 ## Selecting only columns of interest for the analysis
 df_tardigrada_simple <- df_tardigrada %>% 
   select(bin_uri, country_ocean, continent)
 
 ##Checking whether the df_tardigrada_simple was properly made
-head(df_tardigrada_simple)
+glimpse(df_tardigrada_simple)
 
 ## Filtering out NAs from the dataset in continent and bin uri
 df_tardigrada_filtered <- df_tardigrada_simple %>%
-  filter(continent %in% c("North America", "South America", "Antarctica")) %>% 
   filter(!is.na(bin_uri))
 
 ##Checking whether the filtering worked
-head(df_tardigrada_filtered)
+glimpse(df_tardigrada_filtered)
 
 ## Checking if Na values are removed from bin_uri column
 sum(is.na(df_tardigrada_filtered$bin_uri)) 
 ## Returns value of 0, no NA values 
 
-## Counting how many unique bins for each continent
-df_count_bins <- df_tardigrada_filtered %>% 
-  group_by(continent) %>% 
-  summarize(record_count = n_distinct(bin_uri))
 
-df_count_bins
+## Count and plot unique BINs by continent using summarise(.by=)
+## Reorders bars by BIN count and flips coordinates for easier comparison
+df_count_bins <- df_tardigrada_filtered |>
+  dplyr::summarise(record_count = dplyr::n_distinct(bin_uri), .by = continent)
 
-## Plotting the unique BINS for each continent in a bar graph
-ggplot(data = df_count_bins) +
-  geom_col(mapping = aes(x = continent, y = record_count, fill = continent),
-           show.legend = FALSE) + #removes default legend
-  theme(panel.grid = element_blank()) + #removes grid lines
-  labs(title = "Unique Number of BINs in Different Continents",
-       x = "Continent", 
-       y = " Number of Unique BINs")
+## Create and store the plot
+plot_bins <- ggplot(df_count_bins,
+                    aes(x = reorder(continent, record_count), y = record_count, fill = continent)) +
+  geom_col(show.legend = FALSE) +
+  theme(panel.grid = element_blank()) +
+  labs(title = "Unique BINs by Continent",
+       x = "Continent", y = "Unique BINs") +
+  coord_flip()
 
-## Saves the figure to the figures file
-ggsave("../figs/tardigrada_unique_bins.png", width = 5, height = 5, dpi = 320)
+## Save the plot
+ggsave("../figs/tardigrada_unique_bins.png", plot = plot_bins, width = 5, height = 5, dpi = 320)
+
 
 ## Next, how complete are the samples collection in all 3 regions?
 ## Determining the number of unique BINS per continent
