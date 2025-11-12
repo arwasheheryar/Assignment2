@@ -50,16 +50,50 @@ sessionInfo()
 ## Can also use BOLD API to read in the data 
 ## df_tardigrada <- read_delim("https://www.boldsystems.org/index.php/API_Public/combined?taxon=Tardigrada&format=tsv")
 
-## Importing the data file
-df_tardigrada <- read.delim("../data/tardigrada.tsv", sep = "\t") 
+#old*
+## Importing the data file 
+#df_tardigrada <- read.delim("../data/tardigrada.tsv", sep = "\t") 
+
+
+## Cleaning up header names to snake cases.
+#df_tardigrada <- df_tardigrada %>% 
+#janitor::clean_names()
+#old*
+
+#New - Import with readr (tidyverse), clean names, and fix empty strings as NA in one pipe
+df_raw <- read_tsv(
+  "../data/tardigrada.tsv",
+  col_types = cols(.default = col_character()), #forced everything as character to avoid reading issues of non-numeric variables
+  progress = FALSE, show_col_types = FALSE
+)
+
+glimpse(df_raw)
+
+# Should not have any parsing warnings however can be investigated by uncommenting below
+# readr::problems(raw)
+
+#Data cleaning to snake case, removing weird characters/spaces
+
+df_tardigrada <- df_raw |>
+  janitor::clean_names() |>
+  mutate( #replacing empty strings with NA values
+    bin_uri       = na_if(bin_uri, ""),
+    country_ocean = na_if(country_ocean, "")
+  )
+
+##CHECK: Should be TRUE if names were cleaned
+identical(
+  names(df_tardigrada),
+  janitor::make_clean_names(names(df_raw))
+)
+## CHECK: These should both be 0 now, confirming if empty strings are converted to NA
+sum(df_tardigrada$bin_uri == "", na.rm = TRUE)
+sum(df_tardigrada$country_ocean == "", na.rm = TRUE)
+
 
 ## Checking of the data
 glimpse(df_tardigrada)
 class(df_tardigrada) #is a dataframe
-
-## Cleaning up header names to snake cases.
-df_tardigrada <- df_tardigrada %>% 
-  janitor::clean_names()
 
 ## Exploratory data analysis to gain insight into the tardigrade BOLD dataset
 sort(table(df_tardigrada$country_ocean), decreasing = TRUE) #1547 rows of unrecoverable
