@@ -174,55 +174,63 @@ plot_bins <- ggplot(df_count_bins,
 ## Save the plot
 ggsave("../figs/tardigrada_unique_bins.png", plot = plot_bins, width = 5, height = 5, dpi = 320)
 
+##Rarefaction 
+## Build counts matrix in one step (rows = continent, cols = BINs)
+comm <- xtabs(~ continent + bin_uri, data = df_tardigrada_filtered)
 
-## Next, how complete are the samples collection in all 3 regions?
-## Determining the number of unique BINS per continent
-df_tardigrada_count <- df_tardigrada_filtered %>% 
-  group_by(continent, bin_uri) %>% 
-  count(bin_uri)
+## Drop any all-zero rows (just in case)
+comm <- comm[rowSums(comm) > 0, , drop = FALSE]
 
-## Reshaping the data to be able to graph, added values fill = 0 parameter to 
-## replace Na values to 0.
-df_tardigrada_wide <- df_tardigrada_count %>%
-  pivot_wider(names_from = bin_uri, values_from = n, values_fill = 0)
+## This is a helper to create creates up to 200 evenly spaced integer sample sizes (1..N) for rarefaction. It will help to avoid uneven comparisons with sample sizes and get smooth curves.
+sizes_fun <- function(n) unique(round(seq(1, n, length.out = min(n, 200))))
 
-## Checking class of df_tardigrada_wide
-class(df_tardigrada_wide)
+## compute rarefaction curves (class-style lapply + rbind)
+rare_list <- lapply(seq_len(nrow(comm)), function(i) {
+  counts <- as.numeric(comm[i, ])
+  n_tot  <- sum(counts)
+  if (n_tot == 0) return(NULL)
+  sizes <- sizes_fun(n_tot)
+  es    <- as.numeric(vegan::rarefy(counts, sample = sizes))
+  data.frame(
+    continent   = rownames(comm)[i],
+    sample_size = sizes,
+    richness    = es,
+    row.names   = NULL
+  )
+})
+rare_tbl <- do.call(rbind, rare_list)
 
-## Because df_tardigrada_wide is also a tibble, will need 
-## to convert to dataframe to retain the row names. Else, warning message 
-## 'Setting row names on a tibble is deprecated.' will appear on console
-df_tardigrada_wide <- data.frame(df_tardigrada_wide)
+## optional endpoints at observed richness
+rare_end <- data.frame(
+  continent   = rownames(comm),
+  sample_size = rowSums(comm),
+  richness    = apply(comm, 1, function(x) vegan::specnumber(as.numeric(x))),
+  row.names   = NULL
+)
 
-## Retaining the row names to label rarecurve plot later
-rownames(df_tardigrada_wide) <- df_tardigrada_wide$continent
+## plot
+plot_rarefaction <- ggplot(rare_tbl, aes(sample_size, richness, color = continent)) +
+  geom_line(linewidth = 0.9) +
+  geom_point(data = rare_end, aes(sample_size, richness, color = continent),
+             size = 2, show.legend = FALSE) +
+  labs(
+    title = "Rarefaction Curves of BIN Richness by Continent",
+    x = "Individuals Barcoded (sample size)",
+    y = "Expected BIN Richness (E[S])",
+    color = "Continent"
+  ) +
+  theme_light() +
+  theme(panel.grid.minor = element_blank())
 
-## Dropping the first column which contains the continent names because the 
-## rarecurve function only takes in numerical values
-df_tardigrada_wide <- df_tardigrada_wide[,-1]
+print(plot_rarefaction)
 
-## Checking the dataframe to see if it was converted properly
-glimpse(df_tardigrada_wide)
 
-## Mapping rarecurve to show rarecuve on plot screen
-rarecurve(df_tardigrada_wide, 
-          col = c("steelblue", "violet", "green"), #adding colour
-          main = "Rarefraction curve of Different Continents",
-          xlab = "Individuals Barcoded", 
-          ylab = "BIN Richness")
+# Save alongside your other figures
+if (!dir.exists("../figs")) dir.create("../figs", recursive = TRUE)
+ggsave("../figs/tardigrada_rarefaction_ggplot.png", plot = plot_rarefaction,
+       width = 6, height = 5, dpi = 320)
 
-## Setting the directory to save a copy
-png("../figs/tardigrada_rarecurve.png", width = 800, height = 800, res = 150)
 
-## repeat the same code as above to save plot to png device
-rarecurve(df_tardigrada_wide, 
-                          col = c("steelblue", "violet", "green"), #adding colour
-                          main = "Rarefraction curve of Different Continents",
-                          xlab = "Individuals Barcoded", 
-                          ylab = "BIN Richness")
-
-## optional: may need to run the following code below twice to make figure disappear
-dev.off()
 
 ## Calculating the diversity using Shannon's Index of Diversity for each country
 ## in each continent using the diversity function in vegan package
@@ -263,4 +271,3 @@ ggplot(data = df_shannon_index,
 ## Saves the figure to the figures file
 ggsave("../figs/tardigrada_boxplot_shannon.png", width = 5, height = 5, dpi = 320)
 
-rm(list = ls())
